@@ -1,0 +1,480 @@
+---
+title: "ETC3250/5250 Assignment 1"
+author: "Alexandra Goh"
+date: "2024-03-22"
+quarto-required: ">=1.3.0"
+format:
+    html:
+        output-file: assign01-submission.html
+        css: "assignment.css"
+---
+
+<!-- Guide to using quarto at https://quarto.org/docs/get-started/hello/rstudio.html -->
+
+## Exercises
+
+#### 1. Basic math and computing (5pts)
+
+
+The handwritten answer to $$(X-A)^\top S^{-1} (X-A)$$ is shown as below:
+
+```{r, echo = FALSE}
+
+knitr::include_graphics("./image1.jpg")
+
+```
+
+<br>
+
+To compute it numerically using R code, we can do as below:
+
+```{r}
+
+S <- matrix(c(3, 1, 1, 2), nrow = 2, byrow = TRUE)
+X <- matrix(c(4, 2), nrow = 2)
+A <- matrix(c(1, -1), nrow = 2)
+
+# Inverse of S:
+S_inv <- solve(S)
+
+# Compute (X-A)^T S^(-1) (X-A):
+
+answer <- t(X-A) %*% S_inv %*% (X-A)
+cat("The answer is:", answer)
+
+```
+<br>
+
+---
+
+#### 2. ML concepts (8pts)
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+
+library(tidyverse)
+library(dplyr)
+
+d_pred <- read_csv("https://raw.githubusercontent.com/numbats/iml/master/data/pred_data.csv")
+d_pred %>% slice_head(n=3)
+
+```
+
+<br>
+
+##### Compute the accuracy and balanced accuracy for each model.
+
+In model 1, the accuracy is 0.778 while the balanced accuracy is 0.775.
+
+In model 2, the accuracy is 0.63 while the balanced accuracy is 0.629.
+
+```{r, echo = FALSE, message = FALSE}
+
+# Model 1
+
+TP_1 <- sum(d_pred$y == "bilby" & d_pred$pred1 == "bilby")
+TN_1 <- sum(d_pred$y == "quokka" & d_pred$pred1 == "quokka")
+
+accuracy_1 <- (TP_1 + TN_1)/nrow(d_pred)
+
+FN_1 <- sum(d_pred$y == "bilby" & d_pred$pred1 != "bilby")
+TPR_1 <- TP_1 / (TP_1 + FN_1)
+
+FP_1 <- sum(d_pred$y == "quokka" & d_pred$pred1 != "quokka")
+TNR_1 <- TN_1 / (TN_1 + FP_1)
+
+balanced_accuracy_1 <- (TPR_1 + TNR_1)/2
+
+
+# Model 2 
+
+TP_2 <- sum(d_pred$y == "bilby" & d_pred$pred2 == "bilby")
+TN_2 <- sum(d_pred$y == "quokka" & d_pred$pred2 == "quokka")
+
+accuracy_2 <- (TP_2 + TN_2)/nrow(d_pred)
+
+FN_2 <- sum(d_pred$y == "bilby" & d_pred$pred2 != "bilby")
+TPR_2 <- TP_2 / (TP_2 + FN_2)
+
+FP_2 <- sum(d_pred$y == "quokka" & d_pred$pred2 != "quokka")
+TNR_2 <- TN_2 / (TN_2 + FP_2)
+
+balanced_accuracy_2 <- (TPR_2 + TNR_2)/2
+
+
+cat("Model 1:\n")
+cat("Accuracy:", round(accuracy_1, 3), "\n")
+cat("Balanced Accuracy:", round(balanced_accuracy_1, 3), "\n\n")
+
+cat("Model 2:\n")
+cat("Accuracy:", round(accuracy_2, 3), "\n")
+cat("Balanced Accuracy:", round(balanced_accuracy_2, 3), "\n")
+
+```
+<br> 
+
+##### The class predictions were made by using 0.5 and above as the value at which to predict the observation to be a bilby. Compute sensitivity and 1-specificity if (i) 0.3 and (ii) 0.4 were used instead of 0.5.
+
+**For Model 1:**
+
+If 0.3 is used, the sensitivity is 0.958 while the 1-specificity is 0.767.
+
+If 0.4 is used, the sensitivity is 0.917 while the 1-specificity is 0.5.
+
+```{r, echo = FALSE, message = FALSE}
+
+# Threshold of 0.3 (Model 1)
+
+sensitivity_1 <- sum(d_pred$y == "bilby" & d_pred$bilby1 >= 0.3) / sum(d_pred$y == "bilby")
+
+specificity_1 <- sum(d_pred$y == "quokka" & d_pred$bilby1 < 0.3) / sum(d_pred$y == "quokka")
+
+minus_specificity_1 <- 1 - specificity_1
+
+# Threshold of 0.4 (Model 1)
+
+sensitivity_2 <- sum(d_pred$y == "bilby" & d_pred$bilby1 >= 0.4) / sum(d_pred$y == "bilby")
+
+specificity_2 <- sum(d_pred$y == "quokka" & d_pred$bilby1 < 0.4) / sum(d_pred$y == "quokka")
+
+minus_specificity_2 <- 1 - specificity_2
+
+# Print the results
+cat("For Model 1:\n")
+cat("Threshold = 0.3\n")
+cat("Sensitivity:", round(sensitivity_1, 3), "\n")
+cat("1 - Specificity:", round(minus_specificity_1, 3), "\n\n")
+
+cat("Threshold = 0.4\n")
+cat("Sensitivity:", round(sensitivity_2, 3), "\n")
+cat("1 - Specificity:", round(minus_specificity_2, 3), "\n\n")
+
+```
+
+**For Model 2:**
+
+If 0.3 is used, the sensitivity is 0.833 while the 1-specificity is 0.667.
+
+If 0.4 is used, the sensitivity is 0.833 while the 1-specificity is 0.467.
+
+```{r, echo = FALSE, message = FALSE}
+
+# Threshold of 0.3 (Model 2)
+
+sensitivity_3 <- sum(d_pred$y == "bilby" & d_pred$bilby2 >= 0.3) / sum(d_pred$y == "bilby")
+
+specificity_3 <- sum(d_pred$y == "quokka" & d_pred$bilby2 < 0.3) / sum(d_pred$y == "quokka")
+
+minus_specificity_3 <- 1 - specificity_3
+
+# Threshold of 0.4 (Model 2)
+
+sensitivity_4 <- sum(d_pred$y == "bilby" & d_pred$bilby2 >= 0.4) / sum(d_pred$y == "bilby")
+
+specificity_4 <- sum(d_pred$y == "quokka" & d_pred$bilby2 < 0.4) / sum(d_pred$y == "quokka")
+
+minus_specificity_4 <- 1 - specificity_4
+
+# Print the results
+cat("For Model 2:\n")
+cat("Threshold = 0.3\n")
+cat("Sensitivity:", round(sensitivity_3, 3), "\n")
+cat("1 - Specificity:", round(minus_specificity_3, 3), "\n\n")
+
+cat("Threshold = 0.4\n")
+cat("Sensitivity:", round(sensitivity_4, 3), "\n")
+cat("1 - Specificity:", round(minus_specificity_4, 3), "\n\n")
+
+```
+<br> 
+
+##### Make the ROC curves for both models, where bilby is considered the positive class, and explain which is the better of the two.
+
+The AUC (area under the curve) represents the probability that the model will rank a randomly chosen positive instance higher than a randomly chosen negative one. A higher AUC indicates better performance in distinguishing between the positive and negative classes. Therefore, the model with the higher AUC is considered better.
+
+In this case, as Model 1 has a higher AUC (0.8354) than Model 2 (0.6451), we can conclude that Model 1 performs better in terms of discrimination ability between positive and negative instances, assuming that bilby is considered as the positive class.
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+
+library(pROC)
+
+# Model 1 
+roc_curve_1 <- roc(d_pred$y, d_pred$bilby1, levels = c("quokka", "bilby"))
+
+# Model 2 
+roc_curve_2 <- roc(d_pred$y, d_pred$bilby2, levels = c("quokka", "bilby"))
+
+
+plot(roc_curve_1, col = "blue", main = "ROC Curves for Model 1 and Model 2")
+
+lines(roc_curve_2, col = "red")
+
+legend("bottomright", 
+       legend = c("Model 1", "Model 2"), 
+       col = c("blue", "red"), lty = 1)
+
+
+auc_1 <- auc(roc_curve_1)
+auc_2 <- auc(roc_curve_2)
+
+auc_1
+auc_2
+
+```
+
+<br> 
+---
+
+#### 3. Visualisation (8pts)
+
+<br> 
+
+##### Scatterplot Matrix
+
+The scatterplot matrix reveals significant clumping of data points across multiple variable pairs. This clumping suggests regions of higher density or aggregation of data points, which may indicate possible underlying patterns or structures in the data. 
+
+However, based on the scatterplot matrix alone, there is no clear presence of well-defined clusters in the data. While clumps of data points are evident, the boundaries between these clumps are not clearly delineated, suggesting that the data points may belong to overlapping groups rather than distinct clusters.
+
+Additionally, certain outliers are identifiable in the scatterplot matrix. Notable outlier pairs include:
+
+- In variable pairings involving x1, outliers are observed with respect to variables x3, x4, x5, and x6.
+- In variable pairings involving x2, outliers are noticeable with respect to variables x3 and x4.
+- Outlier behavior is also observed in the pairing between x4 and x6.
+
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+
+library(mulgar)
+library(ggplot2)
+library(GGally)
+library(plotly)
+
+ggpairs(c7) +
+  theme(axis.text = element_blank()) +
+  theme_bw() +
+  ggtitle("Pairwise Relationships and Distribution of Variables in Dataset c7")
+
+```
+
+
+##### Tour
+
+According to the tour animation, the data points appear to exhibit linear patterns of movement at certain times. For instance, in some configurations, the data points seem to move along straight lines and align in a linear arrangement as the projection changes. This suggests potential linear relationships/associations between variables in the data.
+
+One reason why linear patterns are revealed in the animation is because in the tour, variables interact dynamically as the projection changes, potentially revealing hidden linear relationships or interactions between variables. Unlike scatterplot matrices, which only show pairwise relationships, the tour animation can capture higher-order interactions contributing to linear patterns in the data. Additionally, the tour explores high-dimensional space by continuously projecting it onto lower-dimensional subspaces. This exploration can reveal linear relationships or patterns not apparent in static scatterplot matrices, which show pairwise relationships in a two-dimensional grid that may not fully capture the complexity of higher-dimensional relationships.
+
+A few outliers are also noticeable at certain projections, indicating data points that deviate significantly from the overall linear trend. These outliers may represent anomalies or unique characteristics in the data.
+
+In contrast to the scatterplot matrix where no obvious clusters were identifiable, the tour animation now reveals the presence of two distinct clusters. The larger cluster exhibits data points arranged in a concave shape, spread out across the projection space. In contrast, the smaller cluster appears more compact and tightly clumped together. This observation suggests a multi-modal distribution within the data, with one cluster displaying a broader dispersion and the other forming a more densely packed group. 
+
+These distinct clustering patterns highlight the complexity and multi-dimensional nature of the data, indicating potential underlying structures that may not be apparent in traditional scatterplot visualizations.
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE, eval = FALSE}
+
+library(tourr)
+
+set.seed(645)
+animate_xy(c7[, 1:6])
+
+```
+
+###### Linear Patterns & Outliers
+
+```{r, echo = FALSE}
+
+knitr::include_graphics("./linear1.png")
+knitr::include_graphics("./linear2.png")
+
+```
+
+##### Clusters
+
+```{r, echo = FALSE}
+
+knitr::include_graphics("./cluster1.png")
+knitr::include_graphics("./cluster2.png")
+
+```
+
+
+<br>
+
+##### 2D View provided by UMAP (Non-Linear Dimension Reduction)
+
+Based on the UMAP projection of the data on a 2D space, it is evident that the data has separated into two distinct clusters, but they exhibit noticeable differences in their appearances. One spherical-shaped cluster appears more compact and tightly grouped, predominantly located at the bottom left of the plot. On the other hand, the second cluster appears more spread out and elongated, particularly towards the right side of the plot. It is difficult to ascertain whether the data points in the extended region (i.e. for the second cluster) truly belong to the same larger cluster or if they represent a separate grouping entirely.
+
+The variability in the spread of data points within the second cluster could be attributed to the differing variances of the 6 variables from the `c7` dataset. This is because when variables have different variances, it suggests that they may contribute unequally to the overall spread of the data. As a result, variables with higher variances may exert more influence on the positioning of data points in the UMAP projection, leading to clusters with varying shapes and extents, as observed in the elongated cluster.
+
+Therefore, it is reasonable to infer that the data points within the compact cluster located at the bottom left likely share common characteristics or exhibit strong similarity. This is evident from the close proximity of data points within this cluster and their reduced dispersion. In contrast, the elongated cluster towards the right side of the plot displays greater dispersion among its data points. This increased dispersion may be attributed to higher variability across the dataset, suggesting a wider range of values and potentially less uniform characteristics among the data points within that cluster.
+
+Additionally, one reason why clusters are more apparent in the UMAP projection is because UMAP is a dimensionality reduction technique which preserves local and global structure in the data, and aims to map high-dimensional data onto a lower-dimensional space while retaining meaningful relationships between data points. Hence, this allows for the visualization of distinct groupings within the data whereby in this case, it is evident that there is a clear distinction between the two groups of data points. 
+
+Meanwhile, scatterplot matrices are limited to pairwise comparisons and may overlook higher-order interactions or groupings. 
+
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+
+library(uwot)
+library(tibble)
+
+set.seed(253)
+c7_umap <- umap(c7[,1:6], init = "spca")
+
+c7_umap_df <- c7_umap %>% 
+  as_tibble() %>% 
+  rename(UMAP1 = V1, UMAP2 = V2) 
+
+ggplot(c7_umap_df, aes(x = UMAP1, 
+                       y = UMAP2)) +
+  geom_point(colour = "#EC5C00") +
+  theme_bw() +
+  ggtitle("UMAP Projection of Dataset c7: 2D Visualization of Data Clusters")
+
+```
+
+---
+
+#### 4. Dimension reduction (15pts)
+
+
+```{r, echo = FALSE, message = FALSE}
+
+library(readr)
+
+
+auswt20 <- read_csv("https://raw.githubusercontent.com/numbats/iml/master/data/auswt20.csv")
+
+```
+
+
+Based on the summary of the PCA conducted on the Australian women's cricket data, we can see that the first few principal components (i.e. PC1, PC2, PC3, PC4) tend to capture the majority of the variation in the data. In this case, PC1 alone explains 44.69% of the variance, while the first five PCs cumulatively explain approximately 85% of the total variation. The summary of the PCA analysis also shows 21 principal components in total, which matches the total number of variables in our dataset after removing the non-numeric variable (i.e. 'Player').
+
+<br>
+
+```{r, echo = FALSE, message = FALSE}
+
+numeric_columns <- sapply(auswt20, is.numeric)
+auswt_numeric <- auswt20[, numeric_columns]
+
+auswt_pca <- prcomp(auswt_numeric, scale = TRUE)
+
+summary(auswt_pca)
+
+```
+
+<br>
+
+Based on the proportion of total variance explained by each principal component (PC), using 4 PCs is the most appropriate. This is because by doing so, it allows for the cumulative explanation of approximately 80% of the total variation.
+
+This is further validated by the Scree plot, as the part where the plot flattens out (i.e. the "elbow") also occurs at 4 principal components.
+
+
+```{r, echo = FALSE, message = FALSE}
+
+mulgar::ggscree(auswt_pca, q=21) +
+  theme_bw() +
+  ggtitle("Scree Plot")
+
+```
+
+According to the summary of the first five principal components, the variables "Matches", "Innings", "NotOuts", "Runs", "HighScore", "BallsFaced", "Hundreds", "Fifties", "Ducks", "Fours" and "Sixes" have the highest absolute loadings along PC1. This suggests that these variables play a significant role in defining the direction of PC1 and contribute the most to the variability explained by PC1.
+
+Similarly, for PC2, the variables "End", "Overs", "Maidens", "Wickets", "Economy", "FourWickets", and "FiveWickets" exhibit the highest absolute loadings along PC2. This indicates that these variables are most strongly associated with PC2 and contribute substantially to the variation explained by PC2.
+
+<br>
+
+```{r, echo = FALSE, message = FALSE}
+
+auswt_pca_smry <- tibble(evl=auswt_pca$sdev^2) %>% 
+  mutate(p = evl/sum(evl), 
+         cum_p = cumsum(evl/sum(evl))) %>%  
+  t() %>% 
+  as.data.frame()
+
+colnames(auswt_pca_smry) <- colnames(auswt_pca$rotation)
+
+auswt_pca_smry <- bind_rows(as.data.frame(auswt_pca$rotation),
+                            auswt_pca_smry)
+
+rownames(auswt_pca_smry) <- c(rownames(auswt_pca$rotation),
+                              "Variance", "Proportion", 
+                              "Cum. prop")
+auswt_pca_smry[,1:5]
+
+```
+
+<br>
+
+In the biplot, a distinct cluster of variables including "Hundreds", "Fours", "Fifties", "Runs", "High Score", "BallsFaced", "Innings", "Sixes", "NotOuts" "Matches" and "Ducks" is observed on the left side. This clustering indicates that these variables contribute strongly to the negative direction of PC1, implying a negative correlation with PC1. Additionally, these variables exhibit the longest arrows in the biplot, signifying their high magnitude in terms of their contribution to the negative direction of PC1. Moreover, among these variables, "Innings", "Sixes", "NotOuts", and "Ducks" are positioned closer to the horizontal axis of PC1. This proximity indicates that these variables contribute more substantially to the variation explained by PC1, as they are more closely aligned with the direction defined by PC1.
+
+Meanwhile, the variables "FiveWickets", "FourWickets", "Maidens", "Overs", "Wickets", "Start", "Economy" and "Average" are observed to be more closely aligned with the vertical axis of PC2, signifying that these variables contribute highly to PC2. In particular, the variables "FiveWickets", "FourWickets", "Maidens", "Overs", and "Wickets" exhibit the longest arrows in the biplot, extending predominantly downwards along PC2. This indicates that these variables have a stronger influence on PC2 and contribute the most significantly to the variation explained by PC2.  
+
+In terms of directionality, the variable "Average" appears to be positively correlated with PC2, while "Start", "Economy", "FiveWickets", "FourWickets", "Maidens", "Overs", and "Wickets" are negatively correlated with PC2. This suggests that increases in "Average" are associated with higher values of PC2, whereas increases in the other variables are associated with lower values of PC2.
+
+The biplot also reveals a notable pattern in the data where a substantial number of points cluster prominently towards the right side. This cluster forms an 'arrowhead' shape, with a dense convergence of points towards the tip on the right, gradually spreading out towards the left. This pattern suggests a relatively strong underlying structure in the data, as opposed to a random dispersion of values often seen in principal components. 
+
+Additionally, there are some notable outliers at the left side of the biplot. These outliers, located away from the main cluster, represent data points that deviate significantly from the overall pattern observed in the principal components analysis.
+
+<br>
+
+```{r, echo = FALSE, message = FALSE}
+
+library(ggfortify)
+biplot <- autoplot(auswt_pca, loadings = TRUE, loadings.label = TRUE) +
+  theme_bw() +
+  ggtitle("Biplot of PCA Loadings for Australian Women's Cricket Statistics")
+
+
+biplot + geom_text(aes(label = auswt20$Player), 
+                   size = 3,
+                   hjust = 0, 
+                   vjust = 0,
+                   nudge_y = 0.02)
+
+```
+
+<br>
+
+When interpreting the two principal components, PC1 captures variability related to various batting metrics such as matches played, innings, runs scored, high score, balls faced, and batting milestones such as fours, sixes, hundreds and fifties. This suggests that players with low values on PC1 tend to have played more matches and innings (i.e. higher participation in the batting aspect of the cricket game), scored more runs, faced more balls, and achieved more significant batting milestones such as hundreds, fifties, and high scores. Conversely, players with high values on PC1 may have lower match participation, fewer runs scored, and fewer milestones achieved. Overall, we can infer that PC1 measures the overall batting performance of Australian women cricketers.
+
+On the other hand, PC2 measures the overall bowling performance of Australian women cricketers, capturing their effectiveness in taking wickets, containing runs, and contributing to their team's success with the ball. This is because PC2 captures variability related to bowling performance metrics such as wickets taken, maiden overs bowled, and the ability to take crucial wickets such as four-wicket and five-wicket hauls. Players with low values on PC2 may have taken more wickets, bowled more maiden overs, as well as taken more four-wicket and five-wicket hauls. Conversely, players with high values on PC2 might have fewer wickets taken, and fewer four-wicket and five-wicket hauls.
+
+As mentioned previously, the PCA biplot reveals a notable pattern in the data where a substantial number of observations cluster towards the right side, indicating high PC1 values with a relatively equal split between positive and negative PC2 values. This suggests that there is variability in the dataset, with some players exhibiting weaker batting performance (high PC1 values) while others demonstrate a mix of both strong and weak bowling performance (positive and negative PC2 values). This could imply that in the dataset overall, there seem to be more inexperienced batters for Australia women cricket players, as indicated by their higher PC1 values.
+
+Additionally, some outliers include:
+
+- Players such as AJ Healy, MM Lanning, and BL Mooney exhibit the lowest PC1 values but relatively high PC2 values. This suggests that while they may have performed well in batting metrics captured by PC1, they have not shown effectiveness in bowling, as indicated by their higher PC2 values. It is thus reasonable to infer that these players may have more experience and proficiency as batters rather than bowlers.
+
+- EA Perry, on the other hand, has low values on both PC1 and PC2, suggesting a relatively balanced performance in both batting and bowling aspects.
+
+- Players such as M Schutt and JL Jonassen have the lowest PC2 values but higher PC1 values compared to AJ Healy, MM Lanning, and BL Mooney. This indicates that while these two players show weaker batting performance compared to the others, they may have performed well in bowling metrics such as taking wickets, containing runs, and achieving significant bowling milestones. Therefore, we can infer that these players may be more experienced as bowlers rather than batters.
+
+Overall, the PCA analysis provides insights into the performance of Australian women cricketers, highlighting variations in both batting and bowling aspects among the players.
+
+
+## References
+
+Cook, D., & Laa, U. (2023). *mulgar: Functions for Pre-Processing Data for Multivariate Data Visualization using Tours* (Version 1.0.2). [R package]. <https://CRAN.R-project.org/package=mulgar>
+
+ESPN. (n.d.). *Live Cricket Score.* Retrieved from <https://www.espncricinfo.com/live-cricket-score>
+
+Kuhn, M., Wickham, H., & et al. (2020). Tidymodels: A Collection of Packages for Modeling and Machine Learning Using Tidyverse Principles. <https://www.tidymodels.org>
+
+Melville, J. (2023). *uwot: The Uniform Manifold Approximation and Projection (UMAP) Method for Dimensionality Reduction* (Version 0.1.16). [R package]. <https://CRAN.R-project.org/package=uwot>
+
+Robin, X., Turck, N., Hainard, A., Tiberti, N., Lisacek, F., Sanchez, J.-C., & Müller, M. (2011). pROC: An Open-Source Package for R and S+ to Analyze and Compare ROC Curves. *BMC Bioinformatics,* *12,* 77. <https://doi.org/10.1186/1471-2105-12-77>
+
+Schloerke, B., Cook, D., Larmarange, J., Briatte, F., Marbach, M., Thoen, E., Elberg, A., & Crowley, J. (2024). *GGally: Extension to 'ggplot2'* (Version 2.2.1). [R package]. <https://CRAN.R-project.org/package=GGally>
+
+Sievert, C. (2020). *Interactive Web-Based Data Visualization with R, plotly, and shiny.* Chapman and Hall/CRC Florida.
+
+Tang, Y., Horikoshi, M., & Li, W. (2016). ggfortify: Unified Interface to Visualize Statistical Result of Popular R Packages. *The R Journal,* *8*(2), 478-489.
+
+Wickham, H. (2016). *ggplot2: Elegant Graphics for Data Analysis.* Springer-Verlag New York.
+
+Wickham, H., Cook, D., Hofmann, H., & Buja, A. (2011). tourr: An R Package for Exploring Multivariate Data with Projections. *Journal of Statistical Software,* *40*(2), 1-18. <http://www.jstatsoft.org/v40/i02/>
+
+Wickham, H., François, R., Henry, L., Müller, K., & Vaughan, D. (2023). *dplyr: A Grammar of Data Manipulation* (Version 1.1.4). [R package]. <https://CRAN.R-project.org/package=dplyr>
+
+
+OpenAI (2023). ChatGPT (version 3.5) [Large language model]. https://chat.openai.com/chat, full script of conversation [here]( https://chat.openai.com/share/c2885657-6db2-4333-9277-727505dd082a)
+

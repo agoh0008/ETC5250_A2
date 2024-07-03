@@ -1,0 +1,6 @@
+"0",""
+"0","library(tidyverse)"
+"0","library(dplyr)"
+"0",""
+"0","d_pred <- read_csv(""https://raw.githubusercontent.com/numbats/iml/master/data/pred_data.csv"")"
+"0","d_pred %>% slice_head(n=3)"

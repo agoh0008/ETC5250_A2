@@ -1,0 +1,1267 @@
+---
+title: "ETC3250/5250 Assignment 2"
+author: "Alexandra Goh"
+date: "2024-03-26"
+quarto-required: ">=1.3.0"
+format:
+    html:
+        output-file: assign02-submission.html
+        css: "assignment.css"
+editor_options: 
+  chunk_output_type: console
+output:
+  bookdown::html_document2: default
+---
+
+<!-- Guide to using quarto at https://quarto.org/docs/get-started/hello/rstudio.html -->
+
+```{r include=FALSE}
+
+knitr::opts_chunk$set(
+  fig.width = 4,
+  fig.height = 4,
+  fig.align = "center",
+  out.width = "100%",
+  code.line.numbers = FALSE,
+  fig.retina = 4,
+  message = FALSE,
+  warning = FALSE,
+  cache = FALSE,
+  dev.args = list(pointsize = 11)
+)
+```
+
+
+## Exercises
+
+#### 1. Bootstrapping your way to provide evidence (8pts)
+
+<br>
+
+##### PC1 Computation
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+
+library(readr)
+library(cricketdata)
+library(boot)
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(tidyr)
+library(knitr)
+library(kableExtra)
+library(tourr)
+library(tidymodels)
+library(MASS)
+library(discrim)
+library(pROC)
+library(viridis)
+library(colorspace)
+library(classifly)
+library(detourr)
+library(crosstalk)
+library(plotly)
+library(broom)
+library(GGally)
+
+auswt20 <- read_csv("https://raw.githubusercontent.com/numbats/iml/master/data/auswt20.csv")
+
+```
+
+<br>
+
+Firstly, it's crucial to assess whether the variables significantly contribute to the first principal component (PC1). Referring to @fig-1, we observe that the confidence intervals for the variables `Average`, `Hundreds`, `Overs`, `Maidens`, `Wickets`, `Economy`, `FourWickets` and `FiveWickets` intersect with the y-intercept. This intersection suggests that zero is a plausible value for the coefficients of these variables. Consequently, we fail to reject the null hypothesis, indicating that the coefficients for `Average`, `Hundreds`, `Overs`, `Maidens`, `Wickets`, `Economy`, `FourWickets` and `FiveWickets` may not be significantly different from zero at the chosen significance level and therefore are not statistically significant. Thus, it is reasonable to infer that these variables may not significantly contribute to PC1. 
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+
+compute_PC1 <- function(data, index) {
+  pc1 <- prcomp(data[index,], center=TRUE, scale=TRUE)$rotation[,1]
+  if (sign(pc1[1]) < 0) 
+    pc1 <- -pc1 
+  return(pc1)
+}
+
+set.seed(201)
+
+added_noise1 <- runif(54, -0.1, 0.1) 
+added_noise2 <- runif(54, -0.1, 0.1) 
+added_noise3 <- runif(54, -0.1, 0.1) 
+added_noise4 <- runif(54, -0.1, 0.1) 
+
+auswt20_adj <- auswt20 %>% 
+  mutate(Hundreds = Hundreds + added_noise1,
+         Fifties = Fifties + added_noise2,
+         FourWickets = FourWickets + added_noise3,
+         FiveWickets = FiveWickets + added_noise4)
+
+# Make sure sign of first PC element is positive
+PC1_boot <- boot(data=auswt20_adj[,6:22], compute_PC1, R=1000)
+
+colnames(PC1_boot$t) <- colnames(auswt20_adj[,6:22])
+
+PC1_boot_ci <- as_tibble(PC1_boot$t) %>%
+  gather(var, coef) %>% 
+  mutate(var = factor(var, levels=c("NotOuts", "Runs", "HighScore", "Average", "BallsFaced", "StrikeRate", "Hundreds", "Fifties", "Ducks", "Fours", "Sixes", "Overs", "Maidens", "Wickets", "Economy", "FourWickets", "FiveWickets"))) %>%
+  group_by(var) %>%
+  summarise(q2.5 = quantile(coef, 0.025), 
+            q5 = median(coef),
+            q97.5 = quantile(coef, 0.975)) %>%
+  mutate(t0 = PC1_boot$t0) 
+
+```
+
+<br>
+
+```{r PCA1, echo = FALSE, message = FALSE, warning = FALSE, fig.width = 6, fig.height = 4}
+#| label: fig-1
+#| fig-cap: Plot showing PC1 coefficients with confidence intervals.
+
+ggplot(PC1_boot_ci, aes(x=var, y=t0)) + 
+  geom_hline(yintercept=0, linetype=2, colour="red") +
+  geom_point() +
+  geom_errorbar(aes(ymin=q2.5, ymax=q97.5), width=0.3) +
+  xlab("") + ylab("Coefficient") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(size = 14)) +
+  labs(title = "PC1 Coefficients with Confidence Intervals")
+
+```
+
+<br>
+
+To analyze which variables contribute more to PC1, we need to consider both the magnitudes and signs of their coefficients, along with their respective confidence intervals. According to Table 1, we find that the variables `NotOuts`, `Runs`, `HighScore`, `BallsFaced`, `Fifties`, `Fours`, and `Sixes` have the largest absolute coefficient values, inferring that these variables likely contribute the most to PC1 due to their higher magnitudes. Additionally, the signs of the coefficients for all of these variables are positive, indicating a positive association with PC1. Therefore, increases in any of these variables are associated with higher values of PC1. 
+
+Moreover, the variables `NotOuts`, `Runs`, `HighScore`, `BallsFaced`, `Fifties`, `Fours`, and `Sixes` exhibit relatively narrow confidence intervals. Narrow confidence intervals signify higher precision in estimating the coefficients, indicating more certainty about these variables' contributions to PC1. Therefore, we can be more confident in the reliability of their coefficient estimates, as these variables are likely to have more significant impacts on PC1.
+
+Overall, PC1 predominantly captures the role of batting performance metrics, particularly those related to scoring runs, in shaping overall performance for women cricket teams. This is supported by our previous analysis, which shows that PC1 primarily reflects batting performance indicators such as `NotOuts`, `Runs`, `HighScore`, `BallsFaced`, `Fifties`, `Fours`, and `Sixes`, all of which have large absolute coefficient values and positive associations with PC1. This indicates that higher values of PC1 are associated with increased batting success, including more runs scored, higher individual scores, and greater attacking shots (i.e., fours and sixes). Furthermore, the inclusion of `Fifties` underscores the importance of consistent performances by players in achieving significant milestones of scoring fifty or more runs in their innings, thereby contributing significantly to their team's batting success.
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+
+summary_table <- PC1_boot_ci %>%
+  dplyr::select(var, q2.5, q5, q97.5, t0) %>% 
+  mutate(across(where(is.numeric), ~round(., 3)))
+
+column_alignment <- c("l", "c", "c", "c", "c")
+
+kable(summary_table, format = "markdown", 
+      caption = "Table 1: Summary of PC1 Coefficients with Confidence Intervals",
+      col.names = c("Variable", "2.5th Percentile", "Median", "97.5th Percentile", "Actual Value of Coefficient"), 
+      align = column_alignment) %>%
+  kable_styling() %>% 
+  scroll_box(width = "600px", height = "500px")
+
+```
+
+
+<br>
+
+##### PC2 Computation
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+
+compute_PC2 <- function(data, index) {
+  pc2 <- prcomp(data[index,], center=TRUE, scale=TRUE)$rotation[,2]
+  if (sign(pc2[12]) < 0) 
+    pc2 <- -pc2
+  return(pc2)
+}
+
+set.seed(201)
+
+added_noise1 <- runif(54, -0.1, 0.1) 
+added_noise2 <- runif(54, -0.1, 0.1) 
+added_noise3 <- runif(54, -0.1, 0.1) 
+added_noise4 <- runif(54, -0.1, 0.1) 
+
+auswt20_adj <- auswt20 %>% 
+  mutate(Hundreds = Hundreds + added_noise1,
+         Fifties = Fifties + added_noise2,
+         FourWickets = FourWickets + added_noise3,
+         FiveWickets = FiveWickets + added_noise4)
+
+# Make sure sign of first PC element is positive
+PC2_boot <- boot(data=auswt20_adj[,6:22], compute_PC2, R=1000)
+
+colnames(PC2_boot$t) <- colnames(auswt20_adj[,6:22])
+
+PC2_boot_ci <- as_tibble(PC2_boot$t) %>%
+  gather(var, coef) %>% 
+  mutate(var = factor(var, levels=c("NotOuts", "Runs", "HighScore", "Average", "BallsFaced", "StrikeRate", "Hundreds", "Fifties", "Ducks", "Fours", "Sixes", "Overs", "Maidens", "Wickets", "Economy", "FourWickets", "FiveWickets"))) %>%
+  group_by(var) %>%
+  summarise(q2.5 = quantile(coef, 0.025), 
+            q5 = median(coef),
+            q97.5 = quantile(coef, 0.975)) %>%
+  mutate(t0 = PC2_boot$t0) 
+
+```
+
+
+<br>
+
+According to @fig-2, we can observe that the confidence intervals for the variables `NotOuts`, `Runs`, `HighScore`, `Average`, `BallsFaced`, `StrikeRate`, `Hundreds`, `Fifties`, `Ducks`, `Fours`, and `Sixes` intersect with the y-intercept line, suggesting that the coefficients for these variables could plausibly be zero. This implies that there's insufficient evidence to reject the null hypothesis, indicating that the coefficients for `NotOuts`, `Runs`, `HighScore`, `Average`, `BallsFaced`, `StrikeRate`, `Hundreds`, `Fifties`, `Ducks`, `Fours`, and `Sixes` may not significantly differ from zero at the chosen significance level, thereby making them statistically insignificant. Therefore, it's reasonable to conclude that these variables may not make a significant contribution to PC2.
+
+<br>
+
+```{r PCA2, echo = FALSE, message = FALSE, warning = FALSE, fig.width = 6, fig.height = 4}
+#| label: fig-2
+#| fig-cap: Plot showing PC2 coefficients with confidence intervals.
+
+ggplot(PC2_boot_ci, aes(x=var, y=t0)) + 
+  geom_hline(yintercept=0, linetype=2, colour="red") +
+  geom_point() +
+  geom_errorbar(aes(ymin=q2.5, ymax=q97.5), width=0.3) +
+  xlab("") + ylab("Coefficient") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(size = 14)) +
+  labs(title = "PC2 Coefficients with Confidence Intervals")
+
+```
+
+<br>
+
+When evaluating the contribution of variables to PC2, Table 2 below offers valuable insights. Notably, variables such as `Overs`, `Maidens`, `Wickets`, `FourWickets` and `FiveWickets` appear to stand out as significant contributors to PC2. Their larger absolute coefficient values underscore their substantial impact on the variation captured by PC2. Furthermore, the positive signs of their coefficients indicate a positive association between these variables and PC2; higher values of these variables correspond to higher PC2 scores.
+
+Moreover, these variables also exhibit relatively narrower confidence intervals compared to others (except for `FiveWickets`), indicating a higher precision in estimating their coefficients. This means we can interpret with greater certainty that these variables indeed play significant roles in their influence on PC2, as the estimated coefficients are more likely to closely approximate the true values of these variables' contributions to PC2.
+
+To conclude, PC2 predominantly captures the bowling performance metrics for women cricket teams. This is evident from variables such as `Overs`, `Maidens`, `Wickets`, `FourWickets` and `FiveWickets`, which have substantial positive coefficients and relatively narrow confidence intervals. These variables indicate the success of the bowling unit, with higher values associated with more overs bowled (i.e. higher effectiveness in containing the opponent's scoring rate), maidens delivered (i.e. bowler's ability to prevent the batswomen from scoring any runs off their deliveries during an over), and wickets taken (i.e. when a bowler successfully gets a batswoman out). The presence of positive coefficients thus suggests that a stronger bowling performance contributes positively to PC2 scores. 
+
+Therefore, teams with bowlers who consistently take wickets and restrict the opposing team's scoring rate through maidens are likely to have higher PC2 scores, indicating better overall bowling performances. Hence, PC2 serves as a comprehensive measure of the bowling effectiveness of women cricket teams.
+
+<br>
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+
+summary_table <- PC2_boot_ci %>%
+  dplyr::select(var, q2.5, q5, q97.5, t0) %>% 
+  mutate(across(where(is.numeric), ~round(., 3)))
+
+column_alignment <- c("l", "c", "c", "c", "c")
+
+kable(summary_table, format = "markdown", 
+      caption = "Table 2: Summary of PC2 Coefficients with Confidence Intervals",
+      col.names = c("Variable", "2.5th Percentile", "Median", "97.5th Percentile", "Actual Value of Coefficient"), 
+      align = column_alignment) %>%
+  kable_styling() %>% 
+  scroll_box(width = "600px", height = "500px")
+
+```
+
+---
+
+
+#### 2. How is your thinking about simple classifiers? (10pts)
+
+<br>
+
+##### Question (a) 
+
+1. **Original Equation**:
+
+$$ y = \frac{e^{\beta_0 + \beta_1 x}}{1 + e^{\beta_0 + \beta_1 x}} $$
+
+
+2. **Denominator Simplification**:
+
+Firstly, we simplify the fraction by dividing both the numerator and denominator of the original fraction by $e^{\beta_0+\beta_1x}$.
+
+$$ y = \frac{1}{\frac{1}{e^{\beta_0+\beta_1x}}+1} $$
+
+3. **Fractional Inversion**:
+
+After the simplification, both sides of the equation are inverted to express $y$ in terms of its odds. 
+
+$$ \frac{1}{y} = \frac{1}{e^{\beta_0+\beta_1x}}+1 $$
+
+4. **Subtraction of 1**:
+
+We then subtract one from both sides to isolate the term on the right-hand side.
+
+$$ \frac{1}{y} - 1 = \frac{1}{e^{\beta_0+\beta_1x}} $$
+
+5. **Fractional Inversion**:
+
+Next, fractional inversion is applied again to both sides to further manipulate the equation and express it in a form that isolates $e^{\beta_0+\beta_1x}$.     
+
+$$ \frac{1}{1/y - 1} = e^{\beta_0+\beta_1x} $$
+
+6. **Re-expression as Ratio**:
+
+Applying the reciprocal property of division to the expression $\frac{1}{1/y - 1}$, we flip the fraction $\frac{1-y}{y}$ to its reciprocal. This step is often used in logistic regression to express the relationship between the predictor variable and the outcome. Specifically, the odds of the event occurring (represented by $y$) are expressed as a ratio of $y$ to $1 - y$.
+
+$$ \frac{y}{1 - y} = e^{\beta_0+\beta_1x} $$
+
+7. **Natural Logarithm Transformation**:
+
+We then take the natural logarithm of the odds ratio which transforms the equation into a linear form, allowing for easier interpretation and analysis. This transformation is applied to model the linear relationship between the log-odds of the outcome and the predictor variable(s) $x$, where $\beta_0$ and $\beta_1$ are the coefficients of the predictor variable(s).
+
+$$ \log_e \frac{y}{1 - y} = \beta_0+\beta_1x $$
+
+
+<br>
+
+
+##### Question (b)  
+
+Substituting the values $\beta_0$ = 0.5, $\beta_1$ = -2 and $x$ = -1:
+
+![](images/image1.jpg)
+
+We can also compute it using R code as below:
+
+```{r, message = FALSE, warning = FALSE}
+
+beta_0 <- 0.5
+beta_1 <- -2
+x <- -1
+
+# Compute logit
+logit_y <- beta_0 + beta_1 * x
+
+# Compute logistic function
+predicted_prob <- 1 / (1 + exp(-logit_y))
+
+cat("The answer is:", round(predicted_prob, 3))
+
+
+```
+
+<br>
+
+
+##### Question (c) 
+
+In linear discriminant analysis (LDA), the goal is to classify observations into different classes based on their predictor variables. LDA assumes that the predictor variables follow a multivariate normal distribution within each class and that the variance-covariance matrices of different classes are the same (homoscedasticity).
+
+Given the sample statistics:
+
+- $S$ = the pooled variance-covariance matrix, representing the covariance structure of the predictor variables within and across classes.
+- $x_a$ and $x_b$ = sample mean vectors for classes A and B, respectively.
+- $x_0$ = the predictor variable vector for the observation we want to classify.
+
+To predict the class of $x_0$, the LDA classification rule is used, which involves calculating the discriminant function for each class and assigning the observation to the class with the highest discriminant function value. 
+
+The LDA discriminant function for class $i$ is given by:
+
+$$ \delta_i(x) = x^T \Sigma^{-1} \mu_i - \frac{1}{2} \mu_i^T \Sigma^{-1} \mu_i + \log(\pi_i) $$
+
+where:
+
+- $x$ = predictor variable vector for the observation
+- $\Sigma$ = pooled variance-covariance matrix
+- $\mu_i$ = mean vector for class $i$
+- $\pi_i$ = prior probability of class $i$
+
+In this case, as the classes have equal prior probabilities, the $\log(\pi_i)$ term does not affect the classification decision.
+
+To classify the observation $x_0$, we first compute the discriminant function for each class and compare the values. The observation is then assigned to the class with the highest discriminant function value.
+
+Firstly, we compute the inverse of the pooled variance-covariance matrix $\Sigma^{-1}$. We then compute the discriminant function values for classes A and B using the provided formula, before comparing the discriminant function values and assigning the observation to the class with the highest value.
+
+Based on the R code below, we found that $\delta_a$ is equal to -2, whereas $\delta_b$ equals -4.67. Since $\delta_a$ > $\delta_b$, we would predict that the observation $x_0$ belongs to class A. 
+
+```{r, message = FALSE, warning = FALSE}
+
+S <- matrix(c(2, 1, 1, 2), nrow = 2, byrow = TRUE)
+x_a <- matrix(c(-2, 2))
+x_b <- matrix(c(2, 2))
+x_0 <- matrix(c(-3, -2))
+
+# Inverse of the pooled variance-covariance matrix
+S_inv <- solve(S)
+
+# Mean vectors for each class
+mean_a <- x_a
+mean_b <- x_b
+
+# Discriminant function values for each class
+delta_a <- t(x_0) %*% S_inv %*% mean_a - 0.5 * t(mean_a) %*% S_inv %*% mean_a
+delta_b <- t(x_0) %*% S_inv %*% mean_b - 0.5 * t(mean_b) %*% S_inv %*% mean_b
+
+# Assign observation x_0 to class with the highest discriminant function value
+
+if (delta_a > delta_b) {
+  class_predicted <- "A"
+} else {
+  class_predicted <- "B"
+}
+
+cat("The class is: class", class_predicted)
+
+
+```
+
+Using another formula to predict the class of $x_0$:
+
+$$x_0 S^{-1}(\bar{x}_A - \bar{x}_B) > \frac{\bar{x}_A + \bar{x}_B}{2} S^{-1}(\bar{x}_A - \bar{x}_B)$$
+
+
+```{r, message = FALSE, warning = FALSE}
+
+S <- matrix(c(2, 1, 1, 2), nrow = 2)
+x_a <- matrix(c(-2, 2), nrow = 2)
+x_b <- matrix(c(2, 2), nrow = 2)
+S_inv <- solve(S)
+
+# Mean vector of class A and class B
+
+mean_ab <- (x_a + x_b) / 2
+
+# Observation x_0
+
+x_0 <- c(-3, -2)
+
+# Left-hand side of the inequality
+lhs <- x_0 %*% S_inv %*% (x_a - x_b)
+
+# Right-hand side of the inequality
+rhs <- (t(mean_ab) %*% S_inv %*% (x_a - x_b))
+
+# Predict class based on inequality
+if (lhs > rhs) {
+  class_predicted <- "A"
+} else {
+  class_predicted <- "B"
+}
+
+cat("The class is: class", class_predicted)
+
+```
+
+
+
+<br>
+
+
+##### Question (d) 
+
+Upon examining the coordinates of the points for Class A and Class B, it appears that the two classes exhibit a symmetrical distribution around the y-axis (represented by `x1` = 0). Class A (orange points) generally has lower `x2` values compared to Class B (blue points).
+
+We can use a simple separation rule based on a quadratic function along the y-axis (`x2` values) to classify points into two classes: Class A (orange) and Class B (blue).
+
+Specifically, the separation is based on the quadratic equation:
+
+$$x_2 = a(x_1 - b)^2 + c$$
+
+where $x_1$ represents the x-coordinate, $x_2$ represents the y-coordinate, and $a$, $b$ and $c$ are parameters defining the shape and position of the quadratic curve. 
+
+The separation rule is visually represented by the quadratic curve plotted in the figure below. In terms of class assignments, this means that points falling below the quadratic curve will be classified as Class A (orange) whereas points falling above the quadratic curve are classified as Class B (blue). The quadratic curve is positioned as such that it captures points with lower `x2` values, consistent with the observation that Class A generally has lower `x2` values. Conversely, points with higher `x2` values fall above the quadratic curve, aligning with the higher `x2` values typically associated with Class B. 
+
+Utilizing a quadratic function such as this allows for a more flexible separation boundary compared to a linear threshold, accommodating potentially non-linear relationships between the classes.
+
+
+```{r, message = FALSE, warning = FALSE, echo = FALSE, fig.align = "center"}
+
+# Coordinates for Class A
+orange_points <- matrix(c(-2, 4, -1, 1, 0, 0, 1, 1, 2, 4), ncol = 2, byrow = TRUE)
+
+# Coordinates for Class B
+blue_points <- matrix(c(-2, 6, -1, 3, 0, 2, 1, 3, 2, 6), ncol = 2, byrow = TRUE)
+
+# Set up the PNG device for saving the plot
+png("plot_output.png", width = 500, height = 500)  
+
+# Plot the points
+plot(orange_points[,1], orange_points[,2], col = "orange", pch = 19, cex = 1, 
+     xlim = c(-2, 2), ylim = c(0, 7),
+     xlab = "x1", ylab = "x2", 
+     main = "Class Separation without using Logistic Regression or LDA",
+     cex.main = 1.3, 
+     cex.lab = 1.5,
+     cex.axis = 1.5)
+points(blue_points[,1], blue_points[,2], col = "blue", pch = 19, cex = 1)
+
+legend("topright", 
+       legend = c("Class A (Orange)", "Class B (Blue)"), 
+       col = c("orange", "blue"), 
+       pch = 19, cex = 1)
+
+# Define parameters for the quadratic equation
+a <- 1    
+b <- 0     # x-coordinate of the vertex
+c <- 1.5   # y-coordinate of the vertex
+
+# Generate x values
+x_values <- seq(-2, 2, length.out = 100)
+
+# Calculate corresponding y values using the quadratic equation
+y_values <- a * (x_values - b)^2 + c
+
+# Plot the quadratic separation rule
+lines(x_values, y_values, col = "red", lty = 2)
+
+text(-2, 1.3, "Quadratic Separation Rule: x2 = a(x1 - b)^2 + c", pos = 4, col = "red", cex = 1)
+
+dev.off()
+
+```
+
+
+<center>![](images/plot_output.png)<center>
+
+<br>
+
+---
+
+
+#### 3. How well can you build a simple classifier? (18pts)
+
+```{r, message = FALSE, warning = FALSE, echo = FALSE}
+
+finance_and_birds <- read_csv("finance_and_birds.csv")
+
+```
+
+```{r, message = FALSE, warning = FALSE, echo = FALSE}
+
+options(digits=2)
+
+finance_and_birds_tidy <- finance_and_birds %>% 
+  dplyr::select(type, trend, linearity, entropy, x_acf1) %>% 
+  arrange(type) %>% 
+  na.omit()
+
+finance_and_birds_std <- finance_and_birds_tidy %>% 
+    mutate_if(is.numeric, function(x) (x-mean(x))/sd(x))
+
+```
+
+<br>
+
+##### Linear Discriminant Analysis
+
+<br>
+
+```{r, message = FALSE, warning = FALSE, echo = FALSE, eval = FALSE}
+
+animate_xy(finance_and_birds_std[,2:5], col = finance_and_birds_tidy$type)
+
+```
+
+Based on the visual analysis of projections from the tour, it appears that the assumptions required for Linear Discriminant Analysis (LDA) may not be fully met.
+
+Firstly, we assessed the assumption of the same variance-covariance matrix across all groups, where the spread of points should have the same distribution. However, it is observed that the distribution of data points within each cluster varied significantly across different projections. While a few projections displayed consistent spreads of points within clusters, indicative of a potentially similar variance-covariance matrix (for instance, when both clusters appeared linear or were uniformly spread out), the majority of projections depicted varying spreads within clusters. In these, we observed instances where points within one cluster were spread out while those in another cluster were more tightly clustered together (see figures below). This discrepancy suggests the presence of heterogeneity in variance-covariance structures across the groups, therefore the assumption of equal variance-covariance matrices is likely not met.
+
+<br>
+
+<u><strong>Inconsistent Distribution of Data Points within Clusters</strong></u>
+
+::: {.columns}
+::: {.column width="50%"}
+![](images/inconsistent1.png)
+:::
+::: {.column width="50%"}
+![](images/inconsistent2.png)
+:::
+:::
+
+<u><strong>Consistent Distribution of Data Points within Clusters</strong></u>
+
+::: {.columns style="text-align: center;"}
+![](images/consistent1.png){width=50%}
+:::
+
+Furthermore, we investigated the assumption of multivariate normality, which requires that the spread of points within each group is roughly elliptical. Our analysis revealed that while very few projections showed clusters with elliptical shapes, indicating potential multivariate normality, this was not consistent across all projections. In fact, the majority of projections depicted clusters with linear shapes, suggesting departures from multivariate normality.
+
+Additionally, upon closer inspection, we observed that some red data points were found within the blue cluster in all of the projections. This suggests potential overlap or misclassification between the two clusters, which may compromise the reliability of the classification results obtained through LDA.
+
+<br>
+
+<u><strong>Clusters with Linear Shapes</strong></u>
+
+::: {.columns}
+::: {.column width="50%"}
+![](images/linear1.png)
+:::
+::: {.column width="50%"}
+![](images/linear2.png)
+:::
+:::
+
+<u><strong>Rare Occurrence of Clusters with Elliptical Shapes</strong></u>
+
+::: {.columns style="text-align: center;"}
+![](images/elliptical1.png){width=50%}
+:::
+
+
+<u><strong>Scatterplot Matrix</strong></u>
+
+According to the scatterplot matrix in @fig-3, it is evident that the clusters representing the two classes (i.e. `birdsongs` and `finance`) are not elliptical as well. Notably, some of the scatterplots display linear relationships between variables, such as in the `x_acf1` vs. `linearity` plot. Additionally, there is overlap between the classes, as some datapoints labeled as `finance` appear within the `birdsongs` cluster.
+
+The dispersion of clusters also differs between the two classes, indicating a lack of homogeneity of covariance matrices. Looking at the scatterplots, we can observe that the spread of points within each group is not consistent across all variables and groups, further suggesting that the assumption of the same variance-covariance matrix is not met. Furthermore, the shape and size of clusters vary between the two classes across different scatterplots. For instance, in the `entropy` vs. `linearity` plot, the `finance` cluster appears larger and more curved compared to the `birdsongs` cluster. Similarly, in the `x_acf1` vs. `entropy` plot, the `birdsongs` cluster exhibits a more curved shape and elongated distribution compared to the `finance` cluster, which appears more linear.
+
+In assessing multivariate normality, the expectation is that the distributions represented in the scatterplot matrix exhibit a bell-shaped or symmetric pattern, as this aligns with the assumption that the joint distribution of variables adheres to a multivariate normal distribution. However, looking at @fig-3, deviations from this assumption are apparent. For instance, the distribution of the `entropy` variable displays a bimodal pattern. Furthermore, the distribution of the `linearity` variable appears positively skewed, while the `x_acf1` variable's distribution shows a negative skew. 
+
+In summary, the scatterplot matrix analysis reveals deviations from the assumptions required for LDA. The observed non-elliptical clusters, lack of consistency in cluster dispersion, and differences in cluster shapes and sizes between classes indicate violations of the homogeneity of covariance matrices assumption. Additionally, deviations from bell-shaped or symmetric distributions signify that the assumption of multivariate normality is not met as well.
+
+
+```{r, message = FALSE, warning = FALSE, echo = FALSE, fig.width = 7, fig.height = 5}
+#| label: fig-3
+#| fig-cap: The scatterplot matrix above visualizes the relationships between variables related to financial time series and audio tracks of birds. Each point represents an observation, colored by class (i.e., type). The matrix helps assess assumptions for Linear Discriminant Analysis (LDA), including multivariate normality and homogeneity of covariance matrices.
+
+ggscatmat(finance_and_birds_std, columns = 2:5,
+          color = "type") +
+  theme(legend.position = "none", 
+        axis.text = element_blank()) +
+  theme_minimal() +
+  ggtitle("Scatterplot Matrix of Financial and Bird Data")
+
+```
+
+
+Overall, the visual summary suggests that the assumptions of LDA may not hold due to inconsistencies in the spread of data points within clusters and deviations from multivariate normality. 
+
+
+<br>
+
+<u><strong>LDA Fit Statistics</strong></u>
+
+The code for splitting the data into training and test sets are shown as below:
+
+```{r train-test, message = FALSE, warning = FALSE}
+
+set.seed(1148)
+
+finance_and_birds_split <- initial_split(finance_and_birds_std, 2/3, 
+                                         strata = type)
+
+finance_and_birds_tr <- training(finance_and_birds_split)
+
+finance_and_birds_ts <- testing(finance_and_birds_split)
+
+```
+
+
+```{r fit-lda, message = FALSE, warning = FALSE, echo = FALSE}
+
+finance_and_birds_tr$type <- factor(finance_and_birds_tr$type)
+
+lda_spec <- discrim_linear() %>% 
+  set_mode("classification") %>% 
+  set_engine("MASS", prior = c(0.5, 0.5))
+
+lda_fit <- lda_spec %>%  
+  fit(type ~ ., data = finance_and_birds_tr)
+
+```
+
+```{r, message = FALSE, warning = FALSE, echo = FALSE}
+
+lda_fit
+
+```
+
+<br> 
+
+Firstly, it's important to note that both `birdsongs` and `finance` have equal prior probabilities, indicating that the model treats both classes equally likely in the absence of other information.
+
+The group means represent the average values of each predictor variable within each class. Based on the summary statistics for the LDA model, we can see that the mean `trend` is 0.63 for the `finance` class, suggesting a positive trend on average within the financial data, whereas the mean `trend` is -0.68 for the `birdsongs` class, indicating a negative trend on average within the birdsong data. In contrast, the average `linearity` for the `birdsongs` class is approximately -0.41, indicating a tendency towards non-linearity or negative linearity within the birdsong data. Meanwhile, the average `linearity` for the `finance` class is approximately 0.40, suggesting some level of positive linearity within the financial data. 
+
+As for `entropy`, its average for the `birdsongs` class is 0.49, indicating a relatively high level of randomness or disorder within the birdsong data (i.e. the `birdsongs` time series may be difficult to forecast). This suggests that the birdsong series may be more difficult to forecast, as it has a lower signal-to-noise ratio or higher unpredictability. 
+
+Meanwhile, the negative average `entropy` value for the `finance` class (-0.46) indicates that the spectral density of the financial data has a lower level of randomness or disorder compared to the birdsong data. This suggests that the financial data may have a more regular or predictable pattern, potentially making it easier to forecast, with a higher signal-to-noise ratio. In other words, the financial data may exhibit less variability across frequencies, making it more predictable compared to the birdsong data.
+
+In terms of autocorrelation, the average autocorrelation (`X_ACF1`) for the `birdsongs` class is approximately -0.22, indicating a negative correlation with the immediately preceding value within the birdsong data. Conversely, the average autocorrelation for the `finance` class is approximately 0.20, suggesting a positive correlation with the observation immediately preceding it in time within the financial data.
+
+Looking at the coefficients of linear discriminants, the variables `trend` and `entropy` appear to have the highest absolute coefficients. Therefore, they can be considered more important in distinguishing between the `birdsongs` and `finance` classes. 
+
+<br>
+
+<u><strong>LDA Confusion Matrices</strong></u>
+
+```{r lda_confusion, message = FALSE, warning = FALSE, echo = FALSE}
+
+finance_birds_tr_pred <- finance_and_birds_tr %>% 
+  mutate(ptype = factor(predict(lda_fit$fit, finance_and_birds_tr)$class),
+         type = factor(type))
+
+finance_birds_ts_pred <- finance_and_birds_ts %>% 
+  mutate(ptype = factor(predict(lda_fit$fit, finance_and_birds_ts)$class),
+         type = factor(type))
+
+train_table <- finance_birds_tr_pred %>%
+  count(type, ptype) %>%
+  group_by(type) %>%
+  mutate(cl_acc = n[ptype == type] / sum(n)) %>%
+  pivot_wider(names_from = ptype, values_from = n, values_fill = 0) %>%
+  dplyr::select(type, birdsongs, finance, cl_acc) %>%
+  kable(format = "html", caption = "Table 3: Training Set Prediction Results") %>%
+  kable_styling()
+
+
+test_table <- finance_birds_ts_pred %>%
+  count(type, ptype) %>%
+  group_by(type) %>%
+  mutate(cl_acc = n[ptype == type] / sum(n)) %>%
+  pivot_wider(names_from = ptype, values_from = n, values_fill = 0) %>%
+  dplyr::select(type, birdsongs, finance, cl_acc) %>%
+  kable(format = "html", caption = "Table 4: Testing Set Prediction Results") %>%
+  kable_styling()
+
+acc_tr <- accuracy(finance_birds_tr_pred, type, ptype)$.estimate
+
+acc_test <- accuracy(finance_birds_ts_pred, type, ptype)$.estimate
+
+train_table
+test_table
+cat("Training Classification Accuracy:", acc_tr)
+cat("Test Classification Accuracy:", acc_test)
+
+```
+
+
+According to the confusion matrices above, the classification accuracy for the training set is approximately 96%, while for the testing set, it is approximately 97%. Both confusion matrices show relatively high counts of true positive predictions for both classes (`birdsongs` and `finance`), indicating that the LDA model correctly classified most instances from both classes. In the training set, only 10 instances of `birdsongs` and 13 instances of `finance` were misclassified as the opposite class, resulting in a relatively low number of false positives. Similarly, in the testing set, only 5 instances of `birdsongs` and 4 instances of `finance` were misclassified, further demonstrating the model's ability to minimize false positives. 
+
+Overall, based on the confusion matrices and classification accuracy values, the LDA model demonstrates strong performance in classifying both `birdsongs` and `finance` classes, with high accuracy on both training and testing sets.
+
+<br>
+
+
+##### Logistic Regression 
+
+
+<br> 
+
+```{r fit-logistic, message = FALSE, warning = FALSE, echo = FALSE}
+
+log_reg <- logistic_reg() %>% 
+  set_engine("glm") %>% 
+  set_mode("classification")
+
+log_fit <- log_reg %>% 
+  fit(type ~ ., data = finance_and_birds_tr)
+
+```
+
+<u><strong>Logistic Regression Fit Statistics</strong></u>
+
+```{r, message = FALSE, warning = FALSE, echo = FALSE}
+
+log_fit
+
+```
+
+<br>
+
+According to the summary statistics for the logistic regression model, we can see that similar to the LDA fit, the `trend` and `entropy` predictors have relatively larger coefficients (158.4 and 94.9 respectively), indicating that they have a stronger influence on the prediction of the outcome compared to the other predictors (`linearity` and `x_acf1`), which have smaller coefficients (-6.4 and -15.4 respectively).
+
+In terms of interpreting the coefficients associated with each predictor variable in the model, we can infer that a one-unit increase in the `trend` variable is associated with a 158.4 increase in the log odds of the default class (`birdsongs`), assuming all other variables are held constant. Conversely, a one-unit increase in the `linearity` variable is associated with a -6.4 decrease in the log odds of the default class (`birdsongs`). This indicates that higher values of `linearity` are associated with a lower likelihood of the default class. As for `entropy` and `x_acf1`, a one-unit increase in the `entropy` variable corresponds to a 94.9 increase in the log odds of the default class (`birdsongs`), while a one-unit increase in the `x_acf1` variable leads to a -15.4 decrease in the log odds of the default class. These interpretations suggest that higher values of `entropy` and lower values of `x_acf1` are associated with a higher likelihood of the default class.
+
+Meanwhile, the residual deviance of the model is 58. The residual deviance tells us how well the response variable can be predicted by a model with 'p' predictor variables; hence the lower the value, the better the model is in predicting the value of the response variable. In this case, a residual deviance of 58 may be considered relatively low.
+
+The AIC of the logistic regression model is 68. It is a measure of the relative quality of the model, balancing the goodness of fit with the complexity of the model. Lower AIC scores generally indicate a better-fit model; in this case however, interpreting the AIC value of 68 may be challenging. It would be more informative to compare this value with those of alternative models fitted using the same dataset to assess relative model performance.
+
+Overall, the logistic regression model seems to demonstrate reasonable fit based on the residual deviance and AIC values.
+
+<br> 
+
+<u><strong>Logistic Regression Confusion Matrices</strong></u>
+
+```{r, message = FALSE, warning = FALSE, echo = FALSE}
+
+finance_and_birds_tr$type <- factor(finance_and_birds_tr$type)
+finance_and_birds_ts$type <- factor(finance_and_birds_ts$type)
+
+finance_birds_tr_pred_log <- log_fit %>%  
+  augment(new_data = finance_and_birds_tr) %>% 
+  rename(ptype = .pred_class)
+
+finance_birds_ts_pred_log <- log_fit %>% 
+  augment(new_data = finance_and_birds_ts) %>% 
+  rename(ptype = .pred_class)
+
+```
+
+```{r logistic_confusion, message = FALSE, warning = FALSE, echo = FALSE}
+
+train_table <- finance_birds_tr_pred_log %>% 
+  count(type, ptype) %>% 
+  group_by(type) %>% 
+  mutate(cl_acc = n[ptype==type]/sum(n)) %>% 
+  pivot_wider(names_from = ptype, 
+              values_from = n, values_fill=0) %>% 
+  dplyr::select(type, birdsongs, finance, cl_acc) %>%
+  kable(format = "html", caption = "Table 5: Training Set Prediction Results") %>%
+  kable_styling()
+
+test_table <- finance_birds_ts_pred_log %>% 
+  count(type, ptype) %>% 
+  group_by(type) %>% 
+  mutate(cl_acc = n[ptype==type]/sum(n)) %>% 
+  pivot_wider(names_from = ptype, 
+              values_from = n, values_fill=0) %>% 
+  dplyr::select(type, birdsongs, finance, cl_acc) %>%
+  kable(format = "html", caption = "Table 6: Testing Set Prediction Results") %>%
+  kable_styling()
+
+acc_tr_1 <- accuracy(finance_birds_tr_pred_log, type, ptype)$.estimate
+
+acc_test_1 <- accuracy(finance_birds_ts_pred_log, type, ptype)$.estimate
+
+train_table
+test_table
+cat("Training Classification Accuracy:", acc_tr_1)
+cat("Test Classification Accuracy:", acc_test_1)
+
+```
+
+
+Both the training and testing set confusion matrices exhibit high counts of true positive predictions for both classes (`birdsongs` and `finance`), indicating that the logistic regression model correctly classified most instances from both classes.
+
+The number of false positives and false negatives is relatively low in both sets, suggesting that the logistic regression model effectively minimizes misclassifications. For instance, in the training set, only 8 instances of `birdsongs` and 5 instances of `finance` were misclassified as the opposite class. Meanwhile, in the test set, only 3 instances of `birdsongs` and 1 instance of `finance` were misclassified as the opposite class.
+
+The classification accuracy for the training set is approximately 98%; for the testing set, it is even higher at 99%, indicating strong performance of the logistic regression model in classifying both classes.
+
+Compared to the LDA model, the logistic regression model achieves slightly higher classification accuracies for both training and testing sets, indicating potentially better performance in this specific scenario. However, it's important to note that this does not confirm that logistic regression is better as it can just be due to randomness.
+
+In summary, based on the confusion matrices and classification accuracy values, the logistic regression model demonstrates stronger performance in classifying both `birdsongs` and `finance` classes, with slightly higher accuracy on both training and testing sets, relative to the LDA model.
+
+<br>
+
+
+##### Model Diagnosis and Comparison
+
+<br>
+
+In diagnosing the models' performance and identifying where they are making mistakes, it's crucial to analyze both the confusion matrices and the spatial distribution of misclassifications observed in the data space.
+
+Based on the confusion matrices above, we can see that both the LDA and logistic regression models demonstrate relatively high classification accuracies. However, when comparing the number of misclassifications: 
+
+- In the training set, LDA misclassifies more `birdsongs` and `finance` observations compared to logistic regression.
+- For instance, LDA misclassifies 10 `birdsongs` and 13 `finance` observations, whereas logistic regression misclassifies 8 `birdsongs` and 5 `finance` observations.
+- In the testing set, the logistic regression model also has slightly fewer misclassifications and slightly higher accuracy especially for `finance` observations.
+- For instance, LDA misclassifies 5 `birdsongs` and 4 `finance` observations, while logistic regression misclassifies only 3 `birdsongs` and 1 `finance` observation.
+
+According to @fig-4 and @fig-5 (where the data points are plotted in the same discriminant space), it's evident that the models don't seem to be making mistakes for the same observations. Specifically, in the training set, the LDA model misclassifies `finance` observations significantly more compared to the logistic model, with clusters of misclassifications observed at distinct regions of the plot in @fig-4. In this figure, misclassified `finance` observations from the LDA model appear to be almost clustered together, particularly at the top and bottom areas of the plot. Similarly, for misclassified `birdsongs` observations, there is a concentration of errors especially at the top region, where one cluster of misclassified `birdsongs` data points can be identified. 
+
+In contrast, logistic regression demonstrates fewer misclassifications for the `finance` class in @fig-5, which are more uniformly spread across the plot. The same pattern is observed for misclassified `birdsongs` observations in the training set, where errors are slightly fewer compared to LDA and more evenly distributed throughout the plot.
+
+When comparing the test sets for both models, similar observations persist. In the LDA test set, there are more misclassified observations for both `finance` and `birdsongs` classes. Notably, in @fig-4, most of the misclassified observations are concentrated near the top area of the plot. However, for the logistic regression model, misclassifications are significantly fewer, as depicted in @fig-5.
+
+Furthermore, it's important to highlight that the misclassifications observed in the test sets for both models are not for the same observations. For instance, in the LDA test set, there are four misclassified `finance` observations, whereas for the logistic regression test set, only one misclassified `finance` observation is found in the plot. Meanwhile, within the LDA test set, there are five misclassified `birdsongs` observations, whereas the logistic regression model misclassifies only three `birdsongs` observations; all of which appear to be at different positions within the plot. This indicates that the models are making errors on different subsets of the data, further emphasizing the distinct patterns of misclassification between LDA and logistic regression.
+
+Overall, this implies that the misclassifications made by the two models may not be consistently occurring for the same data points.
+
+```{r, message = FALSE, warning = FALSE, echo = FALSE, fig.width = 7, fig.height = 5}
+
+finance_birds_pred <- predict(lda_fit$fit, finance_and_birds_std)$x %>% 
+  as.data.frame()
+
+finance_birds_pred <- bind_cols(finance_and_birds_std, finance_birds_pred) 
+
+finance_birds_pred <- finance_birds_pred %>% 
+  mutate(ptype = predict(lda_fit$fit, finance_and_birds_std)$class) %>% 
+  mutate(set = ifelse(1:nrow(finance_and_birds_std) %in%
+                        finance_and_birds_split$in_id, 
+                      "Train", "Test"),
+         err = ifelse(type != ptype, "Yes", "No"))
+
+
+finance_birds_pred$set <- factor(finance_birds_pred$set, levels = c("Train", "Test"))
+
+```
+
+
+```{r, message = FALSE, warning = FALSE, echo = FALSE}
+
+# Predictions for training data
+finance_birds_tr_pred_log <- log_fit %>%  
+  augment(new_data = finance_and_birds_tr) %>% 
+  rename(ptype = .pred_class)
+
+# Predictions for testing data
+finance_birds_ts_pred_log <- log_fit %>% 
+  augment(new_data = finance_and_birds_ts) %>% 
+  rename(ptype = .pred_class)
+
+# Combine predictions with original data
+finance_birds_pred_log <- bind_rows(
+  finance_birds_tr_pred_log %>% mutate(set = "Train"),
+  finance_birds_ts_pred_log %>% mutate(set = "Test")
+)
+
+finance_birds_pred_log <- finance_birds_pred_log %>% 
+  mutate(err = ifelse(type != ptype, "Yes", "No"))
+
+```
+
+```{r, message = FALSE, warning = FALSE, echo = FALSE}
+
+finance_birds_pred <- mutate(finance_birds_pred, model = "LDA")
+finance_birds_pred_log <- mutate(finance_birds_pred_log, model = "Logistic Regression")
+
+finance_birds_pred_log$set <- factor(finance_birds_pred_log$set, levels = c("Train", "Test"))
+
+finance_birds_pred <- rename(finance_birds_pred, lda_err = err)
+finance_birds_pred_log <- rename(finance_birds_pred_log, log_err = err)
+
+
+combined_data <- left_join(finance_birds_pred, finance_birds_pred_log, 
+                           by = c("trend", "linearity", "entropy", "x_acf1"))
+
+```
+
+```{r, message = FALSE, warning = FALSE, echo = FALSE}
+
+# Plot for LDA model
+plot_lda <- ggplot(combined_data, aes(x = LD1, y = 0, 
+                                       color = type.x, 
+                                       shape = lda_err)) +
+  geom_jitter(width = 0.2, height = 0.2) +
+  geom_rug(data = combined_data, aes(x = LD1), sides = "b", alpha = 0.5) +
+  scale_color_discrete(name = "Type") +
+  scale_shape_manual(name = "Error (LDA)", values = c("Yes" = 16, "No" = 1)) +
+  theme_minimal() +
+  labs(title = "Training and Test Data Representation in Discriminant Space (LDA Model)") +
+  facet_wrap(~set.x)
+
+```
+
+```{r, message = FALSE, warning = FALSE, echo = FALSE}
+
+# Plot for logistic regression model
+plot_logistic <- ggplot(combined_data, aes(x = LD1, y = 0, 
+                                            color = type.y, 
+                                            shape = log_err)) +
+  geom_jitter(width = 0.2, height = 0.2) +
+  geom_rug(data = combined_data, aes(x = LD1), sides = "b", alpha = 0.5) +
+  scale_color_brewer(palette = "Set1", name = "Type") +
+  scale_shape_manual(name = "Error (Logistic Regression)", values = c("Yes" = 16, "No" = 1)) +
+  theme_minimal() +
+  labs(title = "Training and Test Data Representation in Discriminant Space (Logistic Model)") +
+  facet_wrap(~set.y)
+
+```
+
+
+```{r, message = FALSE, warning = FALSE, echo = FALSE, fig.width = 7, fig.height = 5}
+#| label: fig-4
+#| fig-cap: Scatterplot of Linear Discriminant Analysis (LDA) results. The plot displays the distribution of data points along LD1 axis with jitter, colored by true class type. The shape of points represents misclassifications (blank circles for correctly classified instances and full circles for misclassified instances). The data are separated into training and testing sets, aiding in visualizing the LDA model's performance.
+
+plot_lda
+
+```
+
+
+```{r, message = FALSE, warning = FALSE, echo = FALSE, fig.width = 7, fig.height = 5}
+#| label: fig-5
+#| fig-cap: Scatterplot of Logistic Regression Model results. The plot displays the distribution of data points along LD1 axis with jitter, colored by true class type. The shape of points represents misclassifications (blank circles for correctly classified instances and full circles for misclassified instances). The data are separated into training and testing sets, aiding in visualizing the Logistic Regression model's performance.
+
+plot_logistic
+
+```
+
+<br>
+
+We should also use interactive graphics to further explore the misclassifications stemming from both the linear discriminant analysis and logictic regression models. The detour plot provides deeper insights into class distribution and potential misclassification areas, while the confusion matrix scatterplots highlight differences in model performance and misclassification patterns.
+
+In both @fig-6 and @fig-7, the detour plots provide a visualization of the multidimensional projection of the time series data for `birdsongs` and `finance`. Both LDA and logistic regression models exhibit well-separated classes, appearing almost elliptical in shape and approximately equal in size. However, instances of overlap between `birdsongs` and `finance` classes are observed, suggesting potential misclassification areas. For example, within both LDA and logistic regression models, certain `finance` data points exhibit overlap with the `birdsongs` class, indicating potential misclassifications. Additionally, some significant outliers are present in both classes, inferring anomalies in the data.
+
+Comparing the scatterplots of the confusion matrices between the two models also highlights disparities in their performance. In @fig-6, the LDA model demonstrates a higher number of misclassifications for both `finance` and `birdsongs` classes compared to logistic regression. 
+
+However, when looking at the positions and distributions of misclassified observations within the plots, there appears to be some similarities between the models. For instance, if we highlight the misclassified `finance` data points in the top left corner for both @fig-6 (LDA model) and @fig-7 (logistic model), we can see that the misclassified observations are approximately in the same area as they appear to be attached to the border of the `birdsongs` cluster (i.e. at the curved area of the `birdsongs` cluster). 
+
+<br>
+
+
+![](images/lda_finance.png)
+
+
+<br>
+
+
+![](images/log_finance.png)
+
+
+Similarly, highlighting misclassified `birdsongs` data points in the bottom right corner of both the LDA (@fig-6) and logistic regression models' (@fig-7) plots reveals a common trend. These misclassified observations are clustered near the misclassified `finance` points at the border of the `birdsongs` cluster, along with the presence of one distinct misclassified `birdsongs` outlier. 
+
+These observations suggest shared challenges faced by both models, including potential class overlap and limitations in capturing complex class boundaries. The outlier's misclassification is understandable, given its deviation from typical class characteristics. However, the placement of misclassified `birdsongs` observations at the border of the `birdsongs` cluster raises questions about the models' ability to accurately distinguish subtle differences within complex class distributions. This misclassification of `birdsongs` points at the border of the `birdsongs` cluster itself indicates difficulties in accurately delineating class boundaries, especially in regions where class distributions overlap. 
+
+<br>
+
+
+![](images/lda_birdsongs.png)
+
+
+<br>
+
+
+![](images/log_birdsongs.png)
+
+
+
+Therefore, contrary to our previous findings from @fig-4 and @fig-5, the models do seem to be making mistakes for the same observations. However, it's still consistent with our previous analysis that the LDA model demonstrates a higher number of misclassifications for both `finance` and `birdsongs` classes compared to logistic regression. Specifically, LDA falsely predicts 17 `finance` observations as `birdsongs` and 15 `birdsongs` observations as `finance` across both the training and test sets. In contrast, as seen in @fig-7, logistic regression has fewer misclassifications, with only 6 `finance` observations misclassified as `birdsongs` and 11 `birdsongs` observations misclassified as `finance`.
+
+In summary, although the logistic model appears to exhibit higher prediction accuracy compared to LDA, notable similarities in their class distributions and potential misclassification areas become apparent upon closer examination through interactive graphics. 
+
+
+<br>
+
+<u><strong>Multidimensional Projection and Confusion Matrix of Financial & Birdsongs Time Series Data (LDA Model)</strong></u>
+
+```{r, message = FALSE, warning = FALSE, echo = FALSE, fig.width = 9, fig.height = 9}
+#| label: fig-6
+#| fig-cap: The detour plot (left) showcases the multidimensional projection of time series data for both 'finance' and 'birdsongs' from the LDA model, color-coded by their true class. The confusion matrix (right) illustrates the classification results, with colors indicating the true class of the time series types. Notably, the bottom-right corner highlights misclassified 'birdsongs' observations, which were falsely predicted as 'finance'. The top-left corner indicates misclassified `finance` observations, which were falsely predicted as `birdsongs`.
+
+finance_and_birds_std$type <- as.factor(finance_and_birds_std$type)
+
+p_cl <- finance_and_birds_std %>% 
+  mutate(p_type = predict(lda_fit$fit, finance_and_birds_std)$class) %>% 
+  dplyr::select(trend:x_acf1, type, p_type)  %>% 
+  mutate(true_class = jitter(as.numeric(type)),
+         predicted_class = jitter(as.numeric(p_type)))
+
+p_cl_shared <- SharedData$new(p_cl)
+
+detour_plot <- detour(p_cl_shared, tour_aes(
+  projection = trend:x_acf1,
+  colour = type)) %>% 
+    tour_path(grand_tour(2), 
+                    max_bases=50, fps = 60) %>% 
+       show_scatter(alpha = 0.9, axes = FALSE,
+                    width = "100%", height = "450px")
+
+conf_mat <- plot_ly(p_cl_shared, 
+                    x = ~predicted_class,
+                    y = ~true_class,
+                    color = ~type,
+                    colors = viridis_pal(option = "D")(3),
+                    height = 450,
+                    width = 550) %>% 
+  highlight(on = "plotly_selected", 
+              off = "plotly_doubleclick") %>%
+    add_trace(type = "scatter", 
+              mode = "markers")
+  
+bscols(
+     detour_plot, conf_mat,
+     widths = c(6, 6)
+ )          
+
+```
+
+<br>
+
+<u><strong>Multidimensional Projection and Confusion Matrix of Financial & Birdsongs Time Series Data (Logistic Regression Model)</strong></u>
+
+```{r, message = FALSE, warning = FALSE, echo = FALSE, fig.width = 9, fig.height = 9}
+#| label: fig-7
+#| fig-cap: The detour plot (left) showcases the multidimensional projection of time series data for both 'finance' and 'birdsongs' from the logistic regresson model, color-coded by their true class. The confusion matrix (right) illustrates the classification results, with colors indicating the true class of the time series types. Notably, the bottom-right corner highlights misclassified 'birdsongs' observations, which were falsely predicted as 'finance'. The top-left corner indicates misclassified `finance` observations, which were falsely predicted as `birdsongs`.
+
+p_cl_log <- finance_and_birds_std %>% 
+  mutate(p_type = predict(log_fit, 
+                          finance_and_birds_std, type = "class")$.pred_class) %>%
+  dplyr::select(trend:x_acf1, type, p_type) %>%
+  mutate(true_class = jitter(as.numeric(type)),
+         predicted_class = jitter(as.numeric(p_type)))
+
+
+p_cl_shared_log <- SharedData$new(p_cl_log)
+
+detour_plot_log <- detour(p_cl_shared_log, tour_aes(
+  projection = trend:x_acf1,
+  colour = type)) %>% 
+    tour_path(grand_tour(2), 
+                    max_bases=50, fps = 60) %>% 
+       show_scatter(alpha = 0.9, axes = FALSE,
+                    width = "100%", height = "450px")
+
+conf_mat_log <- plot_ly(p_cl_shared_log, 
+                    x = ~predicted_class,
+                    y = ~true_class,
+                    color = ~type,
+                    colors = viridis_pal(option = "D")(3),
+                    height = 450,
+                    width = 550) %>% 
+  highlight(on = "plotly_selected", 
+              off = "plotly_doubleclick") %>%
+    add_trace(type = "scatter", 
+              mode = "markers")
+  
+bscols(
+  detour_plot_log, conf_mat_log,
+  widths = c(6, 6)
+) 
+
+```
+
+
+<br>
+
+<u><strong>ROC Curves</strong></u>
+
+To assess the effectiveness of both LDA and logistic regression models in classifying `birdsongs` as the positive class, we analyze the Area Under the Curve (AUC) of their respective Receiver Operating Characteristic (ROC) curves.
+
+According to @fig-8, for the training set, the AUC of the LDA model is 0.995, while the AUC of the logistic regression model is slightly higher at 0.999. This suggests that the logistic regression model performs marginally better in distinguishing `birdsongs` from the `finance` class within the training data.
+
+However, our primary focus lies on the test set, as we aim to evaluate how well the models generalize to entirely new data. On the test set, as depicted in @fig-9, the AUC of the LDA model is 0.996, slightly surpassing the AUC of the logistic regression model, which stands at 0.995. Surprisingly, the LDA model appears to very slightly outperform the logistic regression model on the test set, indicating that it may generalize better to new data compared to logistic regression.
+
+Despite the minor differences in AUC values between the two models, both the training and test ROC curves nearly overlap each other. This indicates that both models have very similar performance in distinguishing `birdsongs` from the `finance` class.
+
+In conclusion, while the logistic regression model may exhibit slightly higher AUC values on the training set, the LDA model demonstrates comparable or even slightly superior performance on the test set. However, given the overlapping ROC curves and marginal differences in AUC values, it is challenging to definitively declare one model as significantly better than the other. Further analysis, such as considering other evaluation metrics or exploring potential biases in the data, may be necessary to make a more informed decision about which model is better. 
+
+<br>
+
+<strong>ROC Curves for Training Set</strong>
+
+
+```{r, message = FALSE, warning = FALSE, echo = FALSE, fig.width = 7, fig.height = 5}
+#| label: fig-8
+#| fig-cap: This figure illustrates the ROC curves for both Linear Discriminant Analysis (LDA) and logistic regression models based on the training dataset. The ROC curve for LDA is depicted in blue, while the curve for logistic regression is shown in red. The area under the curve (AUC) values for both models are provided in the legend, highlighting their respective performances in distinguishing 'birdsongs' as the positive class.
+
+# Calculate predicted probabilities for LDA model on the training set
+lda_probabilities <- predict(lda_fit$fit, finance_and_birds_tr, type = "prob")$posterior
+
+# Extract probabilities for the positive class ("birdsongs")
+lda_prob_birdsongs <- lda_probabilities[, "birdsongs"]
+
+# Compute ROC curve for LDA model
+roc_curve_lda <- roc(finance_and_birds_tr$type == "birdsongs", lda_prob_birdsongs)
+
+# Calculate AUC for LDA model
+auc_lda_score <- round(auc(roc_curve_lda), 3)
+
+# Calculate predicted probabilities for logistic model on the training set
+log_probabilities <- predict(log_fit, type = "prob", new_data = finance_and_birds_tr)
+
+# Extract predicted probabilities for the positive class ("birdsongs")
+log_prob_birdsongs <- log_probabilities$.pred_birdsongs
+
+# Generate ROC curve for logistic model
+roc_curve_logistic <- roc(finance_and_birds_tr$type == "birdsongs", log_prob_birdsongs)
+
+# Calculate AUC for logistic model
+auc_logistic_score <- round(auc(roc_curve_logistic), 3)
+
+# Plot ROC curves for both models
+plot(roc_curve_lda, col = "blue", 
+     main = "ROC Curve - LDA vs Logistic Models (Train)",
+     xlab = "False Positive Rate", 
+     ylab = "True Positive Rate")
+plot(roc_curve_logistic, add = TRUE, col = "red")
+  
+# Add AUCs to the legend
+legend("bottomright", legend = c(paste("LDA AUC =", auc_lda_score), paste("Logistic AUC =", auc_logistic_score)), col = c("blue", "red"), lty = 1, cex = 0.8)
+
+```
+
+<br>
+
+<strong>ROC Curves for Test Set</strong>
+
+```{r, message = FALSE, warning = FALSE, echo = FALSE, fig.width = 7, fig.height = 5}
+#| label: fig-9
+#| fig-cap: This figure illustrates the ROC curves for both Linear Discriminant Analysis (LDA) and logistic regression models based on the test dataset. The ROC curve for LDA is depicted in blue, while the curve for logistic regression is shown in red. The area under the curve (AUC) values for both models are provided in the legend, highlighting their respective performances in distinguishing 'birdsongs' as the positive class.
+
+
+# Calculate predicted probabilities for LDA model on the training set
+lda_probabilities_ts <- predict(lda_fit$fit, finance_and_birds_ts, type = "prob")$posterior
+
+# Extract probabilities for the positive class ("birdsongs")
+lda_prob_birdsongs_ts <- lda_probabilities_ts[, "birdsongs"]
+
+# Compute ROC curve for LDA model
+roc_curve_lda_ts <- roc(finance_and_birds_ts$type == "birdsongs", lda_prob_birdsongs_ts)
+
+# Calculate AUC for LDA model
+auc_lda_score_ts <- round(auc(roc_curve_lda_ts), 3)
+
+# Calculate predicted probabilities for logistic model on the training set
+log_probabilities_ts <- predict(log_fit, type = "prob", new_data = finance_and_birds_ts)
+
+# Extract predicted probabilities for the positive class ("birdsongs")
+log_prob_birdsongs_ts <- log_probabilities_ts$.pred_birdsongs
+
+# Generate ROC curve for logistic model
+roc_curve_logistic_ts <- roc(finance_and_birds_ts$type == "birdsongs", log_prob_birdsongs_ts)
+
+# Calculate AUC for logistic model
+auc_logistic_score_ts <- round(auc(roc_curve_logistic_ts), 3)
+
+# Plot ROC curves for both models
+plot(roc_curve_lda_ts, col = "blue", 
+     main = "ROC Curve - LDA vs Logistic Models (Test)",
+     xlab = "False Positive Rate", 
+     ylab = "True Positive Rate")
+
+plot(roc_curve_logistic_ts, add = TRUE, col = "red")
+  
+# Add AUCs to the legend
+legend("bottomright", legend = c(paste("LDA AUC =", auc_lda_score_ts), paste("Logistic AUC =", auc_logistic_score_ts)), col = c("blue", "red"), lty = 1, cex = 0.8)
+
+
+```
+
+
+<br>
+
+<u><strong>How Time Series for Financial Data and Birdsongs Differ</strong></u>
+
+<br> 
+
+The summary statistics from the LDA and logistic regression models provide insights into the distinctive characteristics of financial data and birdsong audio tracks time series.
+
+In the LDA model, the average trend for `finance` data is positive (0.63), indicating an upward movement over time, while for `birdsongs`, it is negative (-0.68), suggesting a downward trend in acoustic features associated with birdsong patterns. Additionally, `birdsongs` data exhibit negative linearity on average (-0.41), contrasting with positive linearity in `finance` data (0.40). The entropy values reveal higher unpredictability in birdsong audio tracks (0.49) compared to finance data (-0.46), indicating greater difficulty in forecasting birdsong audio patterns. Moreover, `birdsongs` time series display negative autocorrelation (-0.22), signifying a lack of correlation between successive observations, while `finance` data exhibit positive autocorrelation (0.20), implying a degree of persistence in financial trends over time. The logistic regression model further emphasizes the influence of trend and entropy, with larger coefficients for these variables compared to linearity and autocorrelation. 
+
+Financial data, assumed to represent economic indicators and market trends, often exhibit positive trends and positive linearity due to the nature of economic growth and investment patterns. For instance, investors typically seek opportunities for profit, which contributes to the general trend of increasing asset values and market indices. This eventually leads to an overall upward movement in financial markets over time. Additionally, financial data tend to demonstrate some level of predictability, as reflected in their positive autocorrelation, as market trends often follow established patterns (e.g., bull and bear markets). Positive autocorrelation implies that current market movements are influenced by past movements, suggesting some degree of predictability in financial markets. However, it's important to note that while financial data in this time series may exhibit predictability to some extent, markets are also subject to various external factors and unforeseen events that can introduce volatility and uncertainty.
+
+On the other hand, birdsong audio tracks, representing the vocalization patterns of birds, display different dynamics shaped by biological and environmental factors. The negative trend observed in birdsong audio tracks may be attributed to various factors such as territorial behavior, mate attraction, and communication, which can lead to fluctuations and variations in vocalizations over time. Furthermore, birdsongs often have irregular patterns in their sound features as the wide range of sounds birds make can create complexity, which leads to nonlinear patterns in their songs. The higher unpredictability in birdsong audio tracks, indicated by their higher entropy values, also reflects the natural variability and adaptability of bird vocalizations to changing environmental conditions, predator threats, and social interactions.
+
+Overall, these findings underscore the contrasting dynamics between financial data, characterized by trends, positive linearity, and predictability, and birdsongs data, marked by randomness, negative linearity, and unpredictability.
+
+
+<br>
+
+---
+
+## References
+
+Canty, A. & Ripley, B. (2024). *boot: Bootstrap R (S-Plus)
+Functions.* R package version 1.3-30.
+
+Cheng, J., & Sievert, C. (2023). *crosstalk: Inter-Widget Interactivity for HTML Widgets.* R package version 1.2.1. <https://CRAN.R-project.org/package=crosstalk>.
+
+Garnier, S., Ross, N., Rudis, R., Camargo, A. P., Sciaini, M., & Scherer, C. (2024). *viridis(Lite) - Colorblind-Friendly Color Maps for R. Viridis.* [R package version 0.6.5].
+
+Hart, C., & Wang, E. (2022). *detourr: Portable and Performant Tour Animations.* R package version 0.1.0. <https://CRAN.R-project.org/package=detourr>.
+
+Hyndman, R., Gray, C., Gupta, S., Hyndman, T., Rafique, H., & Tran, J. (2023). *cricketdata: International Cricket Data.* R package version 0.2.3. <https://CRAN.R-project.org/package=cricketdata>.
+
+Hvitfeldt, E., & Kuhn, M. (2023). *discrim: Model Wrappers for Discriminant Analysis.* R package version 1.0.1. <https://CRAN.R-project.org/package=discrim>.
+
+Kuhn, et al. (2020). *Tidymodels: a collection of packages for modeling and machine learning using tidyverse principles.* <https://www.tidymodels.org>.
+
+Robin, X., Turck, N., Hainard, A., Tiberti, N., Lisacek, F., Sanchez, J.-C., & Müller, M. (2011). pROC: An open-source package for R and S+ to analyze and compare ROC curves. *BMC Bioinformatics, 12,* 77. DOI: 10.1186/1471-2105-12-77. <http://www.biomedcentral.com/1471-2105/12/77/> 
+
+Robinson, D., Hayes, A., & Couch, S. (2023). *broom: Convert Statistical Objects into Tidy Tibbles.* R package version 1.0.5. <https://CRAN.R-project.org/package=broom>.
+
+Schloerke, B., Cook, D., Larmarange, J., Briatte, F., Marbach, M., Thoen, E., Elberg, A., & Crowley, J. (2024). *GGally: Extension to 'ggplot2'* (Version 2.2.1) [R package]. <https://CRAN.R-project.org/package=GGally>
+
+Sievert, C. (2020). *Interactive Web-Based Data Visualization with R, plotly, and shiny.* Chapman and Hall/CRC Florida.
+
+Venables, W. N., & Ripley, B. D. (2002). *Modern Applied Statistics with S.* Fourth Edition. Springer, New York. ISBN 0-387-95457-0.
+
+Wickham, H. (2016). *ggplot2: Elegant Graphics for Data Analysis.* Springer-Verlag New York.
+
+Wickham, H. (2022). *classifly: Explore Classification Models in High Dimensions.* R package version 0.4.1, <https://CRAN.R-project.org/package=classifly>.
+
+Wickham, H., Averick, M., Bryan, J., Chang, W., McGowan, L. D., François, R., et al. (2019). Welcome to the tidyverse. *Journal of Open Source Software, 4*(43), 1686. doi:10.21105/joss.01686 <https://doi.org/10.21105/joss.01686>.
+
+Wickham, H., Cook, D., Hofmann, H., & Buja, A. (2011). tourr: An R Package for Exploring Multivariate Data with Projections. *Journal of Statistical Software, 40*(2), 1-18. Retrieved from <http://www.jstatsoft.org/v40/i02/>
+
+Wickham, H., François, R., Henry, L., Müller, K., & Vaughan, D. (2023). *dplyr: A Grammar of Data Manipulation.* R package version 1.1.4. <https://CRAN.R-project.org/package=dplyr>.
+
+Wickham, H., Hester, J., & Bryan, J. (2024). *readr: Read Rectangular Text Data (Version 2.1.5)* [R package]. CRAN. Retrieved from <https://CRAN.R-project.org/package=readr>.
+
+Wickham, H., Vaughan, D., & Girlich, M. (2024). *tidyr: Tidy Messy Data (Version 1.3.1)* [R package]. CRAN. Retrieved from <https://CRAN.R-project.org/package=tidyr>.
+
+Xie, Y. (2023). *knitr: A General-Purpose Package for Dynamic Report Generation in R* (Version 1.45) [Software]. Retrieved from <https://yihui.org/knitr/>.
+
+Zeileis, A., Fisher, J. C., Hornik, K., Ihaka, R., McWhite, C. D., Murrell, P., Stauffer, R., & Wilke, C. O. (2020). colorspace: A Toolbox for Manipulating and Assessing Colors and Palettes. *Journal of Statistical Software, 96*(1), 1-49. doi:10.18637/jss.v096.i01. <https://doi.org/10.18637/jss.v096.i01>.
+
+Zhu, H. (2024). *kableExtra: Construct Complex Table with 'kable' and Pipe Syntax* (Version 1.4.0) [Software]. Retrieved from <https://CRAN.R-project.org/package=kableExtra>.
+
+OpenAI (2023). ChatGPT (version 3.5) [Large language model]. https://chat.openai.com/chat, full script of conversation [here](https://chat.openai.com/share/2feba451-f1b3-4363-8933-eebc15a658d9)

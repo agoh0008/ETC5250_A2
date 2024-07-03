@@ -1,0 +1,6 @@
+"0",""
+"0","library(readr)"
+"0",""
+"0",""
+"0","auswt20 <- read_csv(""https://raw.githubusercontent.com/numbats/iml/master/data/auswt20.csv"")"
+"0",""
